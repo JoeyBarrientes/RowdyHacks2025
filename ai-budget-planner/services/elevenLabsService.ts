@@ -1,9 +1,9 @@
 // Read ElevenLabs API key from environment for local development (set in .env.local)
-const ELEVENLABS_API_KEY = (process.env as any).ELEVENLABS_API_KEY || "YOUR_ELEVENLABS_API_KEY_HERE";
+const ELEVENLABS_API_KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY || "YOUR_ELEVENLABS_API_KEY_HERE";
 
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 // A popular default voice ID for ElevenLabs
-const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; 
+const VOICE_ID = "GNZJNyUmjtha6JKquA3M"; 
 
 export const elevenLabsTextToSpeech = async (text: string): Promise<Blob> => {
     if (ELEVENLABS_API_KEY === "YOUR_ELEVENLABS_API_KEY_HERE") {
