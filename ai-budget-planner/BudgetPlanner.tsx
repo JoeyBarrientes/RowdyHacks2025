@@ -220,11 +220,12 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     const chunk = audioQueue.current.shift();
                     if (chunk) {
                         isAppendingRef.current = true;
-                        try {
-                            // Create a new ArrayBuffer from the chunk to resolve the BufferSource type issue.
-                            const bufferCopy = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-                            sourceBuffer.appendBuffer(bufferCopy);
-                        } catch (e) {
+            try {
+              // Copy into a fresh ArrayBuffer to ensure the type is ArrayBuffer (not SharedArrayBuffer)
+              const ab = new ArrayBuffer(chunk.byteLength);
+              new Uint8Array(ab).set(chunk);
+              sourceBuffer.appendBuffer(ab);
+            } catch (e) {
                             console.error('Error appending buffer:', e);
                             audioQueue.current.unshift(chunk); // retry
                             isAppendingRef.current = false;
