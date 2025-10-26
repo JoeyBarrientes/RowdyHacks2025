@@ -42,12 +42,10 @@ interface BudgetPlannerProps {
 }
 
 const elevenLabsVoices = [
+    { id: 'aOcS60CY8CoaVaZfqqb5', name: 'John' },
+    { id: '4YYIPFl9wE5c4L2eu2Gb', name: 'Burt' },
     { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
     { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
-    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
-    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
-    { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli' },
-    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh' },
 ];
 
 const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateToDashboard, onSavePlan, onUpdatePlan }) => {
