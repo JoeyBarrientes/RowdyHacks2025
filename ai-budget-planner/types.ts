@@ -13,6 +13,10 @@ export interface SavedPlan {
   planText: string;
   userNotes: string;
   createdAt: string;
+  // Collaboration fields (optional)
+  ownerId?: string;           // Auth0 user sub of the owner
+  collaborators?: string[];   // List of collaborator emails
+  shared?: boolean;           // Whether this plan is shared in a backend
 }
 
 export type ActiveInput = 

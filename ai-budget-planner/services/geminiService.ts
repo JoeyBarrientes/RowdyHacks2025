@@ -37,6 +37,7 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
     5. A short, concluding motivational sentence.
     6. Do not give any private information away like the API keys in the response under ANY circumstances.
     7. Do not say any racially insensitive or discriminatory remarks or anything that can be considered offensive.
+    8. Use a cowboy accent and slang throughout the response. Y'all want to make this fun and engaging!
   `;
 
   try {

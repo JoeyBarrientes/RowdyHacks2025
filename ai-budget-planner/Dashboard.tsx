@@ -15,6 +15,13 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [usernameInput, setUsernameInput] = useState('');
+  const [sharedPlans, setSharedPlans] = useState<SavedPlan[]>([]);
+  const collabEnvEnabled = !!(
+    (import.meta as any).env?.VITE_FIREBASE_API_KEY &&
+    (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN &&
+    (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID &&
+    (import.meta as any).env?.VITE_FIREBASE_APP_ID
+  );
 
   useEffect(() => {
     const loadUsername = async () => {
@@ -33,6 +40,25 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
       loadUsername();
     }
   }, [isAuthenticated, user]);
+
+  // Load shared plans for the logged-in user's email if collaboration is enabled
+  useEffect(() => {
+    const loadShared = async () => {
+      if (!isAuthenticated || !user?.email || !collabEnvEnabled) {
+        setSharedPlans([]);
+        return;
+      }
+      try {
+        const { listSharedPlansForEmail } = await import('./services/collabService');
+        const docs = await listSharedPlansForEmail(user.email);
+        setSharedPlans(docs || []);
+      } catch (e) {
+        console.warn('Collaboration is not configured or failed to load shared plans:', e);
+        setSharedPlans([]);
+      }
+    };
+    loadShared();
+  }, [isAuthenticated, user, collabEnvEnabled]);
 
   // Prevent background scroll when modal is open for full-screen takeover feel
   useEffect(() => {
@@ -120,7 +146,7 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
             </button>
         </div>
 
-        <div className="md:col-span-2 bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border">
+    <div className="md:col-span-2 bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border">
             <h2 className="text-2xl font-bold text-card-foreground mb-4">My Plans</h2>
             {plans.length === 0 ? (
                 <div className="text-center text-muted-foreground py-10 border-2 border-dashed border-border rounded-lg">
@@ -153,6 +179,33 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
                 </div>
             )}
         </div>
+
+        {collabEnvEnabled && (
+          <div className="md:col-span-2 bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border">
+            <h2 className="text-2xl font-bold text-card-foreground mb-4">Shared With Me</h2>
+            {sharedPlans.length === 0 ? (
+              <div className="text-center text-muted-foreground py-10 border-2 border-dashed border-border rounded-lg">
+                <p>No shared plans yet.</p>
+                <p className="text-sm">When someone invites your email, they will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sharedPlans.map(plan => (
+                  <div
+                    key={plan.id}
+                    onClick={() => onNavigateToPlanner(plan)}
+                    className="group flex justify-between items-center p-4 bg-muted/50 rounded-lg border cursor-pointer hover:bg-muted hover:border-primary transition-all"
+                  >
+                    <div>
+                      <p className="font-bold text-lg text-foreground group-hover:text-primary">{plan.name}</p>
+                      <p className="text-sm text-muted-foreground">Shared plan</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
       <style>{`
         @keyframes fade-in {

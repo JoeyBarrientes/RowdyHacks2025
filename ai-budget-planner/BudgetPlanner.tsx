@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { generateBudget } from './services/geminiService';
 import { generateSpeechStream } from './services/elevenLabsService';
 import type { Expense, ActiveInput, SavedPlan } from './types';
@@ -49,6 +50,7 @@ const elevenLabsVoices = [
 ];
 
 const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateToDashboard, onSavePlan, onUpdatePlan }) => {
+  const { user, isAuthenticated } = useAuth0();
   const [income, setIncome] = useState<string>('');
   const [expenses, setExpenses] = useState<Expense[]>([
     { id: crypto.randomUUID(), category: 'Rent', amount: '1200' },
@@ -63,6 +65,15 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
   const [error, setError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [activeInput, setActiveInput] = useState<ActiveInput>(null);
+  const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [inviteEmail, setInviteEmail] = useState<string>('');
+  const [debugInfo, setDebugInfo] = useState<string>('');
+  const collabEnvEnabled = !!(
+    (import.meta as any).env?.VITE_FIREBASE_API_KEY &&
+    (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN &&
+    (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID &&
+    (import.meta as any).env?.VITE_FIREBASE_APP_ID
+  );
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaSourceRef = useRef<MediaSource | null>(null);
@@ -79,6 +90,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
           setBudgetPlan(initialPlan.planText);
           setPlanName(initialPlan.name);
           setUserNotes(initialPlan.userNotes || '');
+      setCollaborators(initialPlan.collaborators || []);
       }
   }, [initialPlan]);
 
@@ -390,7 +402,12 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
         <div className="bg-card p-6 rounded-2xl shadow-lg border">
           <h2 className="text-2xl font-bold mb-6 text-card-foreground">Your Financials</h2>
           
-          {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-4" role="alert">{error}</div>}
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-4" role="alert">
+              <p>{error}</p>
+              {debugInfo && <p className="text-xs mt-2 font-mono bg-red-200 p-1 rounded">{debugInfo}</p>}
+            </div>
+          )}
 
           <div className="mb-6">
             <label htmlFor="income" className="block text-sm font-medium text-muted-foreground mb-1">Monthly Income ($)</label>
@@ -529,6 +546,87 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     <SaveIcon className="w-5 h-5" />
                     {initialPlan ? 'Update Plan' : 'Save Plan'}
                 </button>
+            </div>
+
+            {/* Collaboration section */}
+            <div className="mt-6 border-t pt-6">
+              <h3 className="text-xl font-bold mb-2 text-card-foreground">Share & Collaborate</h3>
+              {!collabEnvEnabled ? (
+                <p className="text-sm text-muted-foreground">
+                  Collaboration isn’t configured yet. Add your Firebase config to <code>.env.local</code> and restart.
+                </p>
+              ) : !initialPlan ? (
+                <p className="text-sm text-muted-foreground">Save the plan first to enable sharing.</p>
+              ) : (
+                <>
+                  <div className="mb-3">
+                    <p className="text-sm text-muted-foreground">Invite collaborators by email to edit this plan together.</p>
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="friend@example.com"
+                      className="flex-1 pl-3 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!inviteEmail || !isAuthenticated || !user?.email || !initialPlan) return;
+                        
+                        // Clear previous errors and debug info
+                        setError(null);
+                        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'Not Found';
+                        setDebugInfo(`Connecting with Project ID: ${projectId}`);
+
+                        try {
+                          const { inviteCollaborator, collabEnabled, getCollabStatus } = await import('./services/collabService');
+                          const status = getCollabStatus();
+                          if (!collabEnabled || !status.enabled) {
+                            const missingVars = status.missing?.join(', ') || 'Firebase SDK or config';
+                            setError(`Collaboration is not configured. Missing env: ${missingVars}`);
+                            return;
+                          }
+                          
+                          // The service handles fetching the plan and adding the collaborator
+                          await inviteCollaborator(initialPlan.id, inviteEmail.toLowerCase());
+
+                          // Update local state to reflect the change immediately
+                          const newCollaborators = Array.from(new Set([...collaborators, inviteEmail.toLowerCase()]));
+                          setCollaborators(newCollaborators);
+                          setInviteEmail('');
+                          
+                          // Also update the plan in the parent state (which persists to localStorage)
+                          onUpdatePlan({
+                            ...initialPlan,
+                            collaborators: newCollaborators,
+                            shared: true,
+                          });
+                        } catch (e) {
+                          console.error('Invitation Error:', e);
+                          const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+                          setError(`Failed to invite collaborator: ${errorMessage}`);
+                        }
+                      }}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90"
+                    >
+                      Invite
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground mb-2">Collaborators</p>
+                    {collaborators.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No collaborators yet.</p>
+                    ) : (
+                      <ul className="list-disc list-inside text-sm text-card-foreground">
+                        {collaborators.map((email) => (
+                          <li key={email}>{email}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

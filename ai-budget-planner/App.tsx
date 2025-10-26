@@ -88,6 +88,9 @@ const App: React.FC = () => {
             ...plan,
             id: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
+            ownerId: user.sub,
+            collaborators: plan.collaborators || [],
+            shared: plan.shared || false,
         };
         const updatedPlans = await apiService.savePlan(user.sub, newPlan);
         setSavedPlans(updatedPlans);
