@@ -440,7 +440,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     </>
                 ) : 'Generate Budget Plan'}
             </button>
-            <div className="bg-muted p-4 rounded-lg min-h-[200px] text-muted-foreground whitespace-pre-wrap font-serif">
+            <div className="bg-muted p-4 rounded-lg min-h-[200px] text-muted-foreground whitespace-pre-wrap font-sans">
               {budgetPlan || 'Your personalized budget plan will appear here.'}
             </div>
           </div>
