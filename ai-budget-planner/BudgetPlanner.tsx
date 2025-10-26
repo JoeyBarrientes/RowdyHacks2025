@@ -208,14 +208,16 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
 
             const processQueue = () => {
                 if (!isAppendingRef.current && audioQueue.current.length > 0) {
-                    isAppendingRef.current = true;
                     const chunk = audioQueue.current.shift();
-                    try {
-                        sourceBuffer.appendBuffer(chunk);
-                    } catch (e) {
-                        console.error('Error appending buffer:', e);
-                        audioQueue.current.unshift(chunk); // retry
-                        isAppendingRef.current = false;
+                    if (chunk) {
+                        isAppendingRef.current = true;
+                        try {
+                            sourceBuffer.appendBuffer(chunk);
+                        } catch (e) {
+                            console.error('Error appending buffer:', e);
+                            audioQueue.current.unshift(chunk); // retry
+                            isAppendingRef.current = false;
+                        }
                     }
                 }
             };

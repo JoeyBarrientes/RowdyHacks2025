@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 import { PlusIcon, TrashIcon } from './components/Icons';
 import type { SavedPlan } from './types';
 
@@ -9,6 +10,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDeletePlan }) => {
+  const { user } = useAuth0();
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // Prevent navigation when deleting
@@ -18,10 +20,10 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
   };
 
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in">
+    <div className="max-w-4xl mx-auto animate-fade-in p-4 sm:p-6 lg:p-8">
       <header className="text-center mb-12">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-primary">Dashboard</h1>
-        <p className="mt-2 text-lg text-muted-foreground">Welcome back! Manage your budget plans from here.</p>
+        <p className="mt-2 text-lg text-muted-foreground">Welcome back, {user?.given_name || user?.name}!</p>
       </header>
 
       <main className="grid grid-cols-1 md:grid-cols-2 gap-8">
