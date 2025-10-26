@@ -117,7 +117,19 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="min-h-screen bg-background text-foreground font-sans p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen bg-background text-foreground font-sans p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+            {/* Animated Background */}
+            <div 
+                className="fixed inset-0 -z-10 transition-opacity duration-1000 ease-in-out"
+                style={{
+                    backgroundImage: `url(${theme === 'dark' ? '/night_background.png' : '/day_background.png'})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    opacity: 0.3
+                }}
+            />
+            
             <header className="flex justify-between items-start mb-24 sm:mb-28 relative pb-14">
                 {isAuthenticated && user ? (
                     <div ref={dropdownRef} className="relative">
