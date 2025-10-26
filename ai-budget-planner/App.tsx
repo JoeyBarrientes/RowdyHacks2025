@@ -3,7 +3,9 @@ import { useAuth0 } from '@auth0/auth0-react';
 import Dashboard from './Dashboard';
 import BudgetPlanner from './BudgetPlanner';
 import ThemeToggle from './components/ThemeToggle';
+import { apiService } from './services/apiService';
 import type { SavedPlan } from './types';
+import { LoadingIcon } from './components/Icons';
 
 type Page = 'dashboard' | 'planner';
 type Theme = 'light' | 'dark';
@@ -29,24 +31,22 @@ const App: React.FC = () => {
     const [theme, setTheme] = useState<Theme>(getInitialTheme);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const [savedPlans, setSavedPlans] = useState<SavedPlan[]>(() => {
-        try {
-            const item = window.localStorage.getItem('budget-plans');
-            return item ? JSON.parse(item) : [];
-        } catch (error) {
-            console.error("Error reading from localStorage", error);
-            return [];
-        }
-    });
+    const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
     const [currentPlan, setCurrentPlan] = useState<SavedPlan | null>(null);
 
     useEffect(() => {
-        try {
-            window.localStorage.setItem('budget-plans', JSON.stringify(savedPlans));
-        } catch (error) {
-            console.error("Error writing to localStorage", error);
+        const loadPlans = async () => {
+            if (isAuthenticated && user?.sub) {
+                const plans = await apiService.getPlans(user.sub);
+                setSavedPlans(plans);
+            } else {
+                setSavedPlans([]);
+            }
+        };
+        if (!isLoading) {
+            loadPlans();
         }
-    }, [savedPlans]);
+    }, [isAuthenticated, user, isLoading]);
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -82,39 +82,44 @@ const App: React.FC = () => {
         setCurrentPage('dashboard');
     };
 
-    const handleSavePlan = (plan: Omit<SavedPlan, 'id' | 'createdAt'>) => {
+    const handleSavePlan = async (plan: Omit<SavedPlan, 'id' | 'createdAt'>) => {
+        if (!user?.sub) return;
         const newPlan: SavedPlan = {
             ...plan,
             id: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
         };
-        setSavedPlans(prevPlans => [...prevPlans, newPlan]);
+        const updatedPlans = await apiService.savePlan(user.sub, newPlan);
+        setSavedPlans(updatedPlans);
         navigateToDashboard();
     };
 
-    const handleUpdatePlan = (updatedPlan: SavedPlan) => {
-        setSavedPlans(prevPlans => 
-            prevPlans.map(p => p.id === updatedPlan.id ? updatedPlan : p)
-        );
+    const handleUpdatePlan = async (updatedPlan: SavedPlan) => {
+        if (!user?.sub) return;
+        const updatedPlans = await apiService.updatePlan(user.sub, updatedPlan);
+        setSavedPlans(updatedPlans);
         navigateToDashboard();
     };
 
-
-
-    const handleDeletePlan = (id: string) => {
-        setSavedPlans(prevPlans => prevPlans.filter(plan => plan.id !== id));
+    const handleDeletePlan = async (id: string) => {
+        if (!user?.sub) return;
+        const updatedPlans = await apiService.deletePlan(user.sub, id);
+        setSavedPlans(updatedPlans);
     };
 
     if (isLoading) {
-        return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <LoadingIcon className="w-12 h-12 animate-spin text-primary" />
+            </div>
+        );
     }
 
 
     return (
         <div className="min-h-screen bg-background text-foreground font-sans p-4 sm:p-6 lg:p-8">
             <header className="flex justify-between items-center mb-8 sm:mb-12">
-                {/* Profile Icon & Dropdown */}
-                {isAuthenticated && user && (
+                {isAuthenticated && user ? (
                     <div ref={dropdownRef} className="relative">
                         <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="block rounded-full transition-transform duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
                             <img
@@ -139,8 +144,8 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
-                )}
-                <div className="flex-grow"></div> {/* This will push the theme toggle to the right */}
+                ) : <div className="w-10 h-10"></div>}
+                
                 <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
             </header>
             <main>

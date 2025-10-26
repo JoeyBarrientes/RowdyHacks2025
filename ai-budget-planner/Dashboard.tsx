@@ -10,7 +10,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDeletePlan }) => {
-  const { user } = useAuth0();
+  const { user, isAuthenticated, loginWithRedirect } = useAuth0();
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // Prevent navigation when deleting
@@ -19,8 +19,23 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+        <div className="max-w-4xl mx-auto animate-fade-in text-center p-8 bg-card rounded-2xl shadow-lg border">
+            <h1 className="text-3xl font-bold text-card-foreground mb-4">Welcome to Your AI Budget Planner</h1>
+            <p className="text-muted-foreground mb-6">Please log in to create and manage your personalized budget plans.</p>
+            <button
+                onClick={() => loginWithRedirect()}
+                className="bg-primary text-primary-foreground font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-primary/90 transition-all duration-300 transform hover:scale-105"
+            >
+                Log In
+            </button>
+        </div>
+    );
+  }
+
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in p-4 sm:p-6 lg:p-8">
+    <div className="max-w-4xl mx-auto animate-fade-in">
       <header className="text-center mb-12">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-primary">Dashboard</h1>
         <p className="mt-2 text-lg text-muted-foreground">Welcome back, {user?.given_name || user?.name}!</p>

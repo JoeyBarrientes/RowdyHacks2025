@@ -1,5 +1,3 @@
-// This service is correctly implemented for ElevenLabs.
-// Fix: Use process.env for consistency with other services and to resolve TypeScript error.
 const ELEVENLABS_API_KEY = (import.meta as any).env?.VITE_ELEVENLABS_API_KEY || "YOUR_ELEVENLABS_API_KEY_HERE";
 /**
  * Generates speech from text using the ElevenLabs streaming API.
