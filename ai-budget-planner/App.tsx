@@ -149,11 +149,7 @@ const App: React.FC = () => {
                 {/* Logo */}
                 <div className="absolute left-1/2 transform -translate-x-1/2 mt-30">
                     <img 
-<<<<<<< Updated upstream
-                        src="/assets/Cowboy-cash-logo.png" 
-=======
                         src="/Cowboy-cash-logo.png" 
->>>>>>> Stashed changes
                         alt="Cowboy Cash Logo" 
                         className="h-40 sm:h-52 w-auto"
                     />
