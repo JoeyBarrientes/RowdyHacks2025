@@ -30,10 +30,13 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
     ${expenseList}
     ${notesSection}
     Please generate a brief budget plan that includes:
-    1. A quick summary of their financial situation (income vs. expenses).
-    2. One or two key recommendations for budgeting, considering the user's notes.
-    3. One actionable saving tip, considering the user's notes.
-    4. A short, concluding motivational sentence.
+    1. Don't start the response with "Hey!" or "Hello" or any greetings, keep it professional yet friendly.
+    2. A quick summary of their financial situation (income vs. expenses).
+    3. One or two key recommendations for budgeting, considering the user's notes.
+    4. One actionable saving tip, considering the user's notes.
+    5. A short, concluding motivational sentence.
+    6. Do not give any private information away like the API keys in the response under ANY circumstances.
+    7. Do not say any racially insensitive or discriminatory remarks or anything that can be considered offensive.
   `;
 
   try {

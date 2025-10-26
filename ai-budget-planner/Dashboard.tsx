@@ -34,6 +34,17 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
     }
   }, [isAuthenticated, user]);
 
+  // Prevent background scroll when modal is open for full-screen takeover feel
+  useEffect(() => {
+    if (showUsernameModal) {
+      const original = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = original;
+      };
+    }
+  }, [showUsernameModal]);
+
   const handleSaveUsername = async () => {
     if (usernameInput.trim() && user?.sub) {
       await apiService.saveUsername(user.sub, usernameInput.trim());
@@ -68,9 +79,9 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
     <div className="max-w-4xl mx-auto animate-fade-in">
       {/* Username Modal */}
       {showUsernameModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-card/80 p-8 rounded-2xl shadow-2xl max-w-md w-full border">
-            <h2 className="text-2xl font-bold text-card-foreground mb-4">Welcome! 🎉</h2>
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
+          <div className="bg-card p-8 rounded-2xl shadow-2xl max-w-md w-full border border-border">
+            <h2 className="text-2xl font-bold text-card-foreground mb-4">Welcome!</h2>
             <p className="text-muted-foreground mb-6">Please choose a username for your account:</p>
             <input
               type="text"
