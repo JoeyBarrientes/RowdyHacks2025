@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateBudget } from './services/geminiService';
-// This now correctly imports the ElevenLabs streaming service.
 import { generateSpeechStream } from './services/elevenLabsService';
 import type { Expense, ActiveInput, SavedPlan } from './types';
 import { PlusIcon, TrashIcon, MicIcon, SpeakerIcon, LoadingIcon, StopIcon, ArrowLeftIcon, SaveIcon } from './components/Icons';
@@ -20,15 +19,20 @@ interface SpeechRecognitionErrorEvent extends Event {
   error: string;
 }
 
-// SpeechRecognition setup
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-if (recognition) {
-  recognition.continuous = false;
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+// Define the SpeechRecognition interface for type safety
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
 }
+
 
 interface BudgetPlannerProps {
     initialPlan: SavedPlan | null;
@@ -37,11 +41,8 @@ interface BudgetPlannerProps {
     onUpdatePlan: (plan: SavedPlan) => void;
 }
 
-// Using ElevenLabs voices as intended.
 const elevenLabsVoices = [
-    { id: 'ruirxsoakN0GWmGNIo04', name: 'John' },
-    { id: 'sIiRahyxBt2egNH9gWXf', name: 'Leslie' },
-    { id: 'GNZJNyUmjtha6JKquA3M', name: 'Rachel' },
+    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
     { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
     { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
     { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
@@ -71,6 +72,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const isAppendingRef = useRef(false);
   const audioQueue = useRef<Uint8Array[]>([]);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
       if (initialPlan) {
@@ -108,7 +110,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
     setBudgetPlan('');
     try {
       const numericIncome = parseFloat(income);
-      const numericExpenses = expenses.map(e => ({...e, amount: parseFloat(e.amount)}));
+      const numericExpenses = expenses.map(e => ({...e, amount: parseFloat(e.amount)})).filter(e => !isNaN(e.amount));
       const plan = await generateBudget(numericIncome, numericExpenses, userNotes);
       setBudgetPlan(plan);
       if (!planName) {
@@ -164,7 +166,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
       }
       if (mediaSourceRef.current && mediaSourceRef.current.readyState === 'open') {
           try {
-             if(sourceBufferRef.current) mediaSourceRef.current.removeSourceBuffer(sourceBufferRef.current);
+             if(sourceBufferRef.current && mediaSourceRef.current.sourceBuffers.length > 0) mediaSourceRef.current.removeSourceBuffer(sourceBufferRef.current);
              mediaSourceRef.current.endOfStream();
           } catch(e) {
              console.warn("Error ending MediaSource stream:", e);
@@ -180,12 +182,12 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
 
   const togglePlayback = async () => {
     if (isSpeaking) {
-      stopPlayback();
-      return;
+        stopPlayback();
+        return;
     }
-  
+
     if (!budgetPlan) return;
-  
+
     setIsSpeaking(true);
     setError(null);
     audioQueue.current = [];
@@ -197,13 +199,18 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
             stopPlayback();
         };
     }
-    
+
     try {
         const mediaSource = new MediaSource();
         mediaSourceRef.current = mediaSource;
         audioRef.current.src = URL.createObjectURL(mediaSource);
 
         mediaSource.addEventListener('sourceopen', async () => {
+            if (!audioRef.current) {
+                console.error("Audio element was not available.");
+                stopPlayback();
+                return;
+            }
             URL.revokeObjectURL(audioRef.current.src);
             const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
             sourceBufferRef.current = sourceBuffer;
@@ -214,7 +221,9 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     if (chunk) {
                         isAppendingRef.current = true;
                         try {
-                            sourceBuffer.appendBuffer(chunk);
+                            // Create a new ArrayBuffer from the chunk to resolve the BufferSource type issue.
+                            const bufferCopy = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+                            sourceBuffer.appendBuffer(bufferCopy);
                         } catch (e) {
                             console.error('Error appending buffer:', e);
                             audioQueue.current.unshift(chunk); // retry
@@ -231,6 +240,10 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
 
             try {
                 const response = await generateSpeechStream(budgetPlan, selectedVoice);
+
+                if (!response.body) {
+                    throw new Error("Response body is not available for streaming.");
+                }
                 streamReaderRef.current = response.body.getReader();
 
                 audioRef.current.play().catch(e => {
@@ -243,16 +256,23 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     const { done, value } = await streamReaderRef.current.read();
                     if (done) {
                         const checkEndOfStream = () => {
-                            if (!isAppendingRef.current) {
-                                mediaSource.endOfStream();
-                            } else {
+                            if (!isAppendingRef.current && mediaSource.readyState === 'open') {
+                                try {
+                                   if (!sourceBuffer.updating) mediaSource.endOfStream();
+                                   else setTimeout(checkEndOfStream, 100);
+                                } catch (e) {
+                                    console.warn("Error ending MediaSource stream:", e);
+                                }
+                            } else if (mediaSource.readyState === 'open') {
                                 setTimeout(checkEndOfStream, 100);
                             }
                         };
                         checkEndOfStream();
                         break;
                     }
-                    audioQueue.current.push(value);
+                    if (value) {
+                      audioQueue.current.push(value);
+                    }
                     if (!isAppendingRef.current) {
                         processQueue();
                     }
@@ -278,9 +298,32 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
     };
   }, [stopPlayback]);
 
+  // Lazily get or create the speech recognition instance
+  const getRecognition = () => {
+    if (!recognitionRef.current) {
+        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognitionAPI) {
+            const instance: SpeechRecognition = new SpeechRecognitionAPI();
+            instance.continuous = false;
+            instance.lang = 'en-US';
+            instance.interimResults = false;
+            instance.maxAlternatives = 1;
+            recognitionRef.current = instance;
+        }
+    }
+    return recognitionRef.current;
+  };
 
   const startListening = (target: ActiveInput) => {
-    if (!recognition || isListening) return;
+    const recognition = getRecognition();
+    if (!recognition) {
+        setError("Speech recognition is not supported in this browser.");
+        return;
+    }
+    if (isListening) {
+        recognition.stop();
+        return;
+    }
     setActiveInput(target);
     setIsListening(true);
     recognition.start();
@@ -293,36 +336,35 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
         setIncome(transcript.replace(/[^0-9.]/g, ''));
       } else if (activeInput.type === 'expense') {
         const { id, field } = activeInput;
-        // Fix for amount regex
         const value = field === 'amount' ? transcript.match(/(\d+(\.\d+)?)/)?.[0] || '' : transcript;
         handleExpenseChange(id, field, value);
       } else if (activeInput.type === 'notes') {
-        setUserNotes(transcript);
+        setUserNotes(prev => (prev ? prev + ' ' : '') + transcript);
       }
     }
   }, [activeInput, handleExpenseChange]);
 
   useEffect(() => {
-    if (!recognition) {
-        setError("Speech recognition is not supported in this browser.");
-        return;
-    }
-    
-    recognition.onresult = handleRecognitionResult;
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error', event.error);
-      setError(`Speech recognition error: ${event.error}`);
+    const recognition = getRecognition();
+    if (!recognition) return;
+
+    const handleResult = (event: Event) => handleRecognitionResult(event as SpeechRecognitionEvent);
+    const handleError = (event: Event) => {
+      const errorEvent = event as SpeechRecognitionErrorEvent;
+      console.error('Speech recognition error', errorEvent.error);
+      setError(`Speech recognition error: ${errorEvent.error}`);
       setIsListening(false);
     };
+    const handleEnd = () => setIsListening(false);
+    
+    recognition.addEventListener('result', handleResult);
+    recognition.addEventListener('error', handleError);
+    recognition.addEventListener('end', handleEnd);
 
     return () => {
-        if(recognition){
-            recognition.onresult = null;
-            recognition.onend = null;
-            recognition.onerror = null;
-            recognition.abort();
-        }
+        recognition.removeEventListener('result', handleResult);
+        recognition.removeEventListener('error', handleError);
+        recognition.removeEventListener('end', handleEnd);
     }
   }, [handleRecognitionResult]);
   

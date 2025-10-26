@@ -117,7 +117,7 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="min-h-screen bg-background text-foreground font-sans p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+        <div className="min-h-screen text-foreground font-sans p-4 sm:p-6 lg:p-8 relative">
             {/* Animated Background */}
             <div 
                 className="fixed inset-0 -z-10 transition-opacity duration-1000 ease-in-out"
@@ -126,9 +126,11 @@ const App: React.FC = () => {
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundRepeat: 'no-repeat',
-                    opacity: 0.3
+                    opacity: theme === 'dark' ? 0.3 : 0.5
                 }}
             />
+            
+            <div className="fixed inset-0 -z-20 bg-background" />
             
             <header className="flex justify-between items-start mb-24 sm:mb-28 relative pb-14">
                 {isAuthenticated && user ? (
@@ -142,14 +144,14 @@ const App: React.FC = () => {
                         </button>
 
                         {isDropdownOpen && (
-                            <div className="absolute left-0 mt-2 w-64 bg-card border border-border rounded-lg shadow-xl z-10">
+                            <div className="absolute left-0 mt-2 w-64 bg-card/80 backdrop-blur-sm border border-border rounded-lg shadow-xl z-10">
                                 <div className="p-4 border-b border-border">
                                     <p className="font-bold text-lg text-foreground">{user.name}</p>
                                     <p className="text-sm text-muted-foreground">{user.email}</p>
                                 </div>
                                 <button
                                     onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-                                    className="w-full text-left px-4 py-3 text-red-500 hover:bg-muted transition-colors"
+                                    className="w-full text-left px-4 py-3 text-red-500 hover:bg-muted/50 transition-colors"
                                 >
                                     Log Out
                                 </button>

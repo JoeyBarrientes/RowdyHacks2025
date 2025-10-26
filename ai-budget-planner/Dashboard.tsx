@@ -51,7 +51,7 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
 
   if (!isAuthenticated) {
     return (
-        <div className="max-w-4xl mx-auto animate-fade-in text-center p-8 bg-card rounded-2xl shadow-lg border">
+        <div className="max-w-4xl mx-auto animate-fade-in text-center p-8 bg-card/80 backdrop-blur-sm rounded-2xl shadow-lg border">
             <h1 className="text-3xl font-bold text-card-foreground mb-4">Welcome to Your AI Budget Planner</h1>
             <p className="text-muted-foreground mb-6">Please log in to create and manage your personalized budget plans.</p>
             <button
@@ -68,8 +68,8 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
     <div className="max-w-4xl mx-auto animate-fade-in">
       {/* Username Modal */}
       {showUsernameModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card p-8 rounded-2xl shadow-2xl max-w-md w-full border">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card/80 p-8 rounded-2xl shadow-2xl max-w-md w-full border">
             <h2 className="text-2xl font-bold text-card-foreground mb-4">Welcome! 🎉</h2>
             <p className="text-muted-foreground mb-6">Please choose a username for your account:</p>
             <input
@@ -109,7 +109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
             </button>
         </div>
 
-        <div className="md:col-span-2 bg-card p-6 rounded-2xl shadow-lg border">
+        <div className="md:col-span-2 bg-card/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border">
             <h2 className="text-2xl font-bold text-card-foreground mb-4">My Plans</h2>
             {plans.length === 0 ? (
                 <div className="text-center text-muted-foreground py-10 border-2 border-dashed border-border rounded-lg">
