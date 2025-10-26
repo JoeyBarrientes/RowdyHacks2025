@@ -1,7 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Auth0Provider } from '@auth0/auth0-react';
 import App from './App';
 import LandingPage from './src/LandingPage';
@@ -18,13 +18,16 @@ root.render(
       domain="dev-qgl4efnazhfyumes.us.auth0.com"
       clientId="maGVE9TGZSH4KFrarZ8f3ovQqRwAzrXi"
       authorizationParams={{
-        redirect_uri: window.location.origin + '/dashboard'
+        // Use hash-based routing to avoid server 404s on refresh
+        redirect_uri: window.location.origin + '/#/dashboard'
       }}
     >
       <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/dashboard" element={<App />} />
+          {/* Fallback: send unknown routes to dashboard */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
     </Auth0Provider>
