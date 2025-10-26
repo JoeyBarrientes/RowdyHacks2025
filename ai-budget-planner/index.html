@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -17,9 +16,64 @@
   }
 }
 </script>
+<style>
+  :root {
+    --background: 220 13% 97%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --primary: 204 92% 38%;
+    --primary-foreground: 0 0% 100%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --border: 220 13% 91%;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 215 28% 83%;
+    --card: 224 28% 13%;
+    --card-foreground: 215 28% 83%;
+    --primary: 200 98% 61%;
+    --primary-foreground: 224 71% 4%;
+    --muted: 223 23% 19%;
+    --muted-foreground: 220 17% 62%;
+    --border: 215 14% 24%;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+  }
+</style>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: 'hsl(var(--border))',
+            background: 'hsl(var(--background))',
+            foreground: 'hsl(var(--foreground))',
+            primary: {
+              DEFAULT: 'hsl(var(--primary))',
+              foreground: 'hsl(var(--primary-foreground))',
+            },
+            muted: {
+              DEFAULT: 'hsl(var(--muted))',
+              foreground: 'hsl(var(--muted-foreground))',
+            },
+            card: {
+              DEFAULT: 'hsl(var(--card))',
+              foreground: 'hsl(var(--card-foreground))',
+            },
+          },
+        },
+      },
+    }
+  </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900">
+  <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
