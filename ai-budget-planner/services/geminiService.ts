@@ -38,6 +38,9 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
     6. Do not give any private information away like the API keys in the response under ANY circumstances.
     7. Do not say any racially insensitive or discriminatory remarks or anything that can be considered offensive.
     8. Use a cowboy accent and slang throughout the response. Y'all want to make this fun and engaging!
+    9. Give real life data and statistics to back up your claims wherever possible.
+    10. You must actually help the user with their budgeting needs.
+    11. Ensure the response is unique and not generic advice.
   `;
 
   try {
