@@ -149,7 +149,7 @@ const App: React.FC = () => {
                 {/* Logo */}
                 <div className="absolute left-1/2 transform -translate-x-1/2">
                     <img 
-                        src="../assets/Cowboy-cash-logo.png" 
+                        src="/assets/Cowboy-cash-logo.png" 
                         alt="Cowboy Cash Logo" 
                         className="h-12 sm:h-16 w-auto"
                     />
