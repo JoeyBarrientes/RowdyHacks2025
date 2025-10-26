@@ -8,8 +8,11 @@ const LandingPage: React.FC = () => {
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 text-center">
       <div className="max-w-2xl animate-fade-in">
         <h1 className="text-5xl sm:text-7xl font-extrabold text-primary mb-4">
-          AI Budget Planner
+          Cowboy Cash
         </h1>
+        <h2 className="text-2xl sm:text-3xl text-foreground mb-4">
+          Collaborative AI Budget Planner
+        </h2>
         <p className="text-lg sm:text-xl text-muted-foreground mb-8">
           Take control of your finances with intelligent, personalized budget plans.
           Use your voice or text to input your details and let our AI create a plan tailored just for you.
