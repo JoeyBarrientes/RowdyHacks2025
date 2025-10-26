@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { PlusIcon, TrashIcon } from './components/Icons';
+import { apiService } from './services/apiService';
 import type { SavedPlan } from './types';
 
 interface DashboardProps {
@@ -11,6 +12,35 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDeletePlan }) => {
   const { user, isAuthenticated, loginWithRedirect } = useAuth0();
+  const [username, setUsername] = useState<string | null>(null);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [usernameInput, setUsernameInput] = useState('');
+
+  useEffect(() => {
+    const loadUsername = async () => {
+      if (user?.sub) {
+        const savedUsername = await apiService.getUsername(user.sub);
+        if (savedUsername) {
+          setUsername(savedUsername);
+        } else {
+          // First time user - show modal to ask for username
+          setShowUsernameModal(true);
+        }
+      }
+    };
+    
+    if (isAuthenticated && user) {
+      loadUsername();
+    }
+  }, [isAuthenticated, user]);
+
+  const handleSaveUsername = async () => {
+    if (usernameInput.trim() && user?.sub) {
+      await apiService.saveUsername(user.sub, usernameInput.trim());
+      setUsername(usernameInput.trim());
+      setShowUsernameModal(false);
+    }
+  };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // Prevent navigation when deleting
@@ -36,9 +66,35 @@ const Dashboard: React.FC<DashboardProps> = ({ plans, onNavigateToPlanner, onDel
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
+      {/* Username Modal */}
+      {showUsernameModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card p-8 rounded-2xl shadow-2xl max-w-md w-full border">
+            <h2 className="text-2xl font-bold text-card-foreground mb-4">Welcome! 🎉</h2>
+            <p className="text-muted-foreground mb-6">Please choose a username for your account:</p>
+            <input
+              type="text"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSaveUsername()}
+              placeholder="Enter your username"
+              className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+              autoFocus
+            />
+            <button
+              onClick={handleSaveUsername}
+              disabled={!usernameInput.trim()}
+              className="w-full bg-primary text-primary-foreground font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-primary/90 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="text-center mb-12">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-primary">Dashboard</h1>
-        <p className="mt-2 text-lg text-muted-foreground">Welcome back, {user?.given_name || user?.name}!</p>
+        <p className="mt-2 text-lg text-muted-foreground">Welcome back, {username || user?.given_name || user?.name}!</p>
       </header>
 
       <main className="grid grid-cols-1 md:grid-cols-2 gap-8">

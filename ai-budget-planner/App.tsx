@@ -118,7 +118,7 @@ const App: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-background text-foreground font-sans p-4 sm:p-6 lg:p-8">
-            <header className="flex justify-between items-center mb-8 sm:mb-12 relative">
+            <header className="flex justify-between items-start mb-24 sm:mb-28 relative pb-14">
                 {isAuthenticated && user ? (
                     <div ref={dropdownRef} className="relative">
                         <button onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="block rounded-full transition-transform duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
@@ -147,13 +147,18 @@ const App: React.FC = () => {
                 ) : <div className="w-10 h-10"></div>}
                 
                 {/* Logo */}
-                <div className="absolute left-1/2 transform -translate-x-1/2">
+                <div className="absolute left-1/2 transform -translate-x-1/2 mt-30">
                     <img 
+<<<<<<< Updated upstream
                         src="/assets/Cowboy-cash-logo.png" 
+=======
+                        src="/Cowboy-cash-logo.png" 
+>>>>>>> Stashed changes
                         alt="Cowboy Cash Logo" 
-                        className="h-12 sm:h-16 w-auto"
+                        className="h-40 sm:h-52 w-auto"
                     />
                 </div>
+                <br></br>
                 
                 <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
             </header>

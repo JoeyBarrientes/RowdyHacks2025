@@ -53,9 +53,32 @@ const deletePlan = async (userId: string, planId: string): Promise<SavedPlan[]> 
   }
 };
 
+// Username management
+const getUsername = async (userId: string): Promise<string | null> => {
+  if (!userId) return null;
+  try {
+    return window.localStorage.getItem(`username-${userId}`);
+  } catch (error) {
+    console.error("Error reading username from localStorage", error);
+    return null;
+  }
+};
+
+const saveUsername = async (userId: string, username: string): Promise<void> => {
+  if (!userId) throw new Error("User not authenticated");
+  try {
+    window.localStorage.setItem(`username-${userId}`, username);
+  } catch (error) {
+    console.error("Error saving username to localStorage", error);
+    throw error;
+  }
+};
+
 export const apiService = {
   getPlans,
   savePlan,
   updatePlan,
   deletePlan,
+  getUsername,
+  saveUsername,
 };
