@@ -41,6 +41,10 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
+    if (typeof response.text !== 'string' || response.text.length === 0) {
+      console.error("Gemini API returned empty or undefined text:", response);
+      throw new Error("Gemini API returned no text.");
+    }
     return response.text;
   } catch (error) {
     console.error("Error generating budget:", error);

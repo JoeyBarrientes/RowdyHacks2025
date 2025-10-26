@@ -39,6 +39,8 @@ interface BudgetPlannerProps {
 
 // Using ElevenLabs voices as intended.
 const elevenLabsVoices = [
+    { id: 'ruirxsoakN0GWmGNIo04', name: 'John' },
+    { id: 'sIiRahyxBt2egNH9gWXf', name: 'Leslie' },
     { id: 'GNZJNyUmjtha6JKquA3M', name: 'Rachel' },
     { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
     { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
