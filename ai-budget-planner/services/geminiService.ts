@@ -41,6 +41,7 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
     9. Give real life data and statistics to back up your claims wherever possible.
     10. You must actually help the user with their budgeting needs.
     11. Ensure the response is unique and not generic advice.
+    12. Use real life resources and techniques that have been proven to work and help people manage their finances better.
   `;
 
   try {
