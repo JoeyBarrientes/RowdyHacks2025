@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 // The API key is injected by the environment, so we can use process.env.API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -46,29 +46,4 @@ export const generateBudget = async (income: number, expenses: NumericExpense[],
     console.error("Error generating budget:", error);
     throw new Error("Failed to communicate with the Gemini API.");
   }
-};
-
-export const geminiTextToSpeech = async (text: string, voiceName: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: voiceName },
-                    },
-                },
-            },
-        });
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) {
-            throw new Error("No audio data received from Gemini API.");
-        }
-        return base64Audio;
-    } catch (error) {
-        console.error("Error with Gemini Text-to-Speech:", error);
-        throw new Error("Failed to generate audio from text using Gemini.");
-    }
 };

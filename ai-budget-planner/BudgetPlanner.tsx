@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { generateBudget, geminiTextToSpeech } from './services/geminiService';
-import { elevenLabsTextToSpeech } from './services/elevenLabsService';
-import { decode, decodeAudioData } from './utils/audioUtils';
+import { generateBudget } from './services/geminiService';
+// This now correctly imports the ElevenLabs streaming service.
+import { generateSpeechStream } from './services/elevenLabsService';
 import type { Expense, ActiveInput, SavedPlan } from './types';
 import { PlusIcon, TrashIcon, MicIcon, SpeakerIcon, LoadingIcon, StopIcon, ArrowLeftIcon, SaveIcon } from './components/Icons';
 
-// Fix: Add minimal type definitions for Web Speech API to resolve TypeScript errors for SpeechRecognitionEvent and SpeechRecognitionErrorEvent.
+// Minimal type definitions for Web Speech API
 interface SpeechRecognitionEvent extends Event {
   results: {
     [index: number]: {
@@ -21,7 +21,6 @@ interface SpeechRecognitionErrorEvent extends Event {
 }
 
 // SpeechRecognition setup
-// Fix: Use type assertion to access experimental browser APIs 'SpeechRecognition' and 'webkitSpeechRecognition' on window.
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 if (recognition) {
@@ -38,19 +37,14 @@ interface BudgetPlannerProps {
     onUpdatePlan: (plan: SavedPlan) => void;
 }
 
-const geminiVoices = [
-    { id: 'Kore', name: 'Kore (Balanced)' },
-    { id: 'Puck', name: 'Puck (Calm)' },
-    { id: 'Fenrir', name: 'Fenrir (Deep)' },
-    { id: 'Zephyr', name: 'Zephyr (Warm)' },
-];
-
+// Using ElevenLabs voices as intended.
 const elevenLabsVoices = [
-    { id: '21m00Tcm4TlvDq8ikWAM', name: 'Rachel' },
-    { id: '29vD33N1CtxCmqQRPO9k', name: 'Drew' },
-    { id: '2EiwWnXFnvU5JabPnv8n', name: 'Clyde' },
-    { id: '5Q0t7uMcjvnagumLfvZi', name: 'Paul' },
+    { id: 'GNZJNyUmjtha6JKquA3M', name: 'Rachel' },
     { id: 'AZnzlk1XvdvUeBnXmlld', name: 'Domi' },
+    { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Bella' },
+    { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni' },
+    { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli' },
+    { id: 'TxGEqnHWrfWFTfGW9XjX', name: 'Josh' },
 ];
 
 const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateToDashboard, onSavePlan, onUpdatePlan }) => {
@@ -62,17 +56,19 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
   const [budgetPlan, setBudgetPlan] = useState<string>('');
   const [planName, setPlanName] = useState<string>('');
   const [userNotes, setUserNotes] = useState<string>('');
-  const [ttsProvider, setTtsProvider] = useState<'gemini' | 'elevenlabs'>('gemini');
-  const [selectedGeminiVoice, setSelectedGeminiVoice] = useState<string>(geminiVoices[0].id);
-  const [selectedElevenLabsVoice, setSelectedElevenLabsVoice] = useState<string>(elevenLabsVoices[0].id);
+  const [selectedVoice, setSelectedVoice] = useState<string>(elevenLabsVoices[0].id);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [activeInput, setActiveInput] = useState<ActiveInput>(null);
 
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaSourceRef = useRef<MediaSource | null>(null);
+  const sourceBufferRef = useRef<SourceBuffer | null>(null);
+  const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const isAppendingRef = useRef(false);
+  const audioQueue = useRef<Uint8Array[]>([]);
 
   useEffect(() => {
       if (initialPlan) {
@@ -149,13 +145,40 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
         });
       }
   };
+  
+  const stopPlayback = useCallback(async () => {
+      if (streamReaderRef.current) {
+          try {
+              await streamReaderRef.current.cancel();
+          } catch(e) {
+              console.warn("Error cancelling stream reader:", e);
+          }
+          streamReaderRef.current = null;
+      }
+
+      if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+      }
+      if (mediaSourceRef.current && mediaSourceRef.current.readyState === 'open') {
+          try {
+             if(sourceBufferRef.current) mediaSourceRef.current.removeSourceBuffer(sourceBufferRef.current);
+             mediaSourceRef.current.endOfStream();
+          } catch(e) {
+             console.warn("Error ending MediaSource stream:", e);
+          }
+      }
+      
+      mediaSourceRef.current = null;
+      sourceBufferRef.current = null;
+      audioQueue.current = [];
+      isAppendingRef.current = false;
+      setIsSpeaking(false);
+  }, []);
 
   const togglePlayback = async () => {
-    if (isSpeaking && audioSourceRef.current) {
-      audioSourceRef.current.stop();
-      audioSourceRef.current.onended = null;
-      audioSourceRef.current = null;
-      setIsSpeaking(false);
+    if (isSpeaking) {
+      stopPlayback();
       return;
     }
   
@@ -163,50 +186,94 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
   
     setIsSpeaking(true);
     setError(null);
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
-      const audioContext = audioContextRef.current;
-      
-      let audioBuffer: AudioBuffer;
+    audioQueue.current = [];
+    isAppendingRef.current = false;
 
-      if (ttsProvider === 'gemini') {
-          const base64Audio = await geminiTextToSpeech(budgetPlan, selectedGeminiVoice);
-          audioBuffer = await decodeAudioData(
-            decode(base64Audio),
-            audioContext,
-            24000,
-            1,
-          );
-      } else {
-          const blob = await elevenLabsTextToSpeech(budgetPlan, selectedElevenLabsVoice);
-          const arrayBuffer = await blob.arrayBuffer();
-          audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      }
-  
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-  
-      audioSourceRef.current = source;
-  
-      source.onended = () => {
-        setIsSpeaking(false);
-        audioSourceRef.current = null;
-      };
-  
+    if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.onended = () => {
+            stopPlayback();
+        };
+    }
+    
+    try {
+        const mediaSource = new MediaSource();
+        mediaSourceRef.current = mediaSource;
+        audioRef.current.src = URL.createObjectURL(mediaSource);
+
+        mediaSource.addEventListener('sourceopen', async () => {
+            URL.revokeObjectURL(audioRef.current.src);
+            const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+            sourceBufferRef.current = sourceBuffer;
+
+            const processQueue = () => {
+                if (!isAppendingRef.current && audioQueue.current.length > 0) {
+                    isAppendingRef.current = true;
+                    const chunk = audioQueue.current.shift();
+                    try {
+                        sourceBuffer.appendBuffer(chunk);
+                    } catch (e) {
+                        console.error('Error appending buffer:', e);
+                        audioQueue.current.unshift(chunk); // retry
+                        isAppendingRef.current = false;
+                    }
+                }
+            };
+            
+            sourceBuffer.addEventListener('updateend', () => {
+                isAppendingRef.current = false;
+                processQueue();
+            });
+
+            try {
+                const response = await generateSpeechStream(budgetPlan, selectedVoice);
+                streamReaderRef.current = response.body.getReader();
+
+                audioRef.current.play().catch(e => {
+                    console.error("Audio playback failed:", e);
+                    setError("Audio playback failed. Please interact with the page and try again.");
+                    stopPlayback();
+                });
+
+                while (true) {
+                    const { done, value } = await streamReaderRef.current.read();
+                    if (done) {
+                        const checkEndOfStream = () => {
+                            if (!isAppendingRef.current) {
+                                mediaSource.endOfStream();
+                            } else {
+                                setTimeout(checkEndOfStream, 100);
+                            }
+                        };
+                        checkEndOfStream();
+                        break;
+                    }
+                    audioQueue.current.push(value);
+                    if (!isAppendingRef.current) {
+                        processQueue();
+                    }
+                }
+            } catch (err) {
+                const errorMessage = (err instanceof Error) ? err.message : 'An unknown error occurred.';
+                setError(`Failed to play audio: ${errorMessage}`);
+                console.error(err);
+                stopPlayback();
+            }
+        });
     } catch (err) {
-      const errorMessage = (err instanceof Error) ? err.message : 'An unknown error occurred.';
-      setError(`Failed to generate audio: ${errorMessage}`);
-      console.error(err);
-      setIsSpeaking(false);
+        const errorMessage = (err instanceof Error) ? err.message : 'An unknown error occurred.';
+        setError(`Failed to set up audio playback: ${errorMessage}`);
+        console.error(err);
+        stopPlayback();
     }
   };
+  
+  useEffect(() => {
+    return () => {
+        stopPlayback();
+    };
+  }, [stopPlayback]);
+
 
   const startListening = (target: ActiveInput) => {
     if (!recognition || isListening) return;
@@ -222,7 +289,8 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
         setIncome(transcript.replace(/[^0-9.]/g, ''));
       } else if (activeInput.type === 'expense') {
         const { id, field } = activeInput;
-        const value = field === 'amount' ? transcript.replace(/[^0-9.]/g, '') : transcript;
+        // Fix for amount regex
+        const value = field === 'amount' ? transcript.match(/(\d+(\.\d+)?)/)?.[0] || '' : transcript;
         handleExpenseChange(id, field, value);
       } else if (activeInput.type === 'notes') {
         setUserNotes(transcript);
@@ -249,6 +317,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
             recognition.onresult = null;
             recognition.onend = null;
             recognition.onerror = null;
+            recognition.abort();
         }
     }
   }, [handleRecognitionResult]);
@@ -307,148 +376,116 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                         onChange={(e) => handleExpenseChange(expense.id, 'category', e.target.value)}
                         placeholder="Category"
                         className="w-full pl-3 pr-10 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                     />
-                     <button onClick={() => startListening({ type: 'expense', id: expense.id, field: 'category' })} className={`absolute inset-y-0 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'expense' && activeInput.id === expense.id && activeInput.field === 'category' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label={`Use microphone for expense category ${index + 1}`}>
-                       <MicIcon className="w-5 h-5" />
-                     </button>
+                      />
+                      <button onClick={() => startListening({ type: 'expense', id: expense.id, field: 'category' })} className={`absolute inset-y-0 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'expense' && activeInput.id === expense.id && activeInput.field === 'category' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label={`Use microphone for category of expense ${index + 1}`}>
+                          <MicIcon className="w-5 h-5" />
+                      </button>
                   </div>
                   <div className="col-span-5 relative">
-                    <input
+                      <input
                         type="number"
                         value={expense.amount}
                         onChange={(e) => handleExpenseChange(expense.id, 'amount', e.target.value)}
-                        placeholder="Amount ($)"
+                        placeholder="Amount"
                         className="w-full pl-3 pr-10 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                     />
-                     <button onClick={() => startListening({ type: 'expense', id: expense.id, field: 'amount' })} className={`absolute inset-y-0 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'expense' && activeInput.id === expense.id && activeInput.field === 'amount' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label={`Use microphone for expense amount ${index + 1}`}>
-                       <MicIcon className="w-5 h-5" />
-                     </button>
+                      />
+                      <button onClick={() => startListening({ type: 'expense', id: expense.id, field: 'amount' })} className={`absolute inset-y-0 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'expense' && activeInput.id === expense.id && activeInput.field === 'amount' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label={`Use microphone for amount of expense ${index + 1}`}>
+                          <MicIcon className="w-5 h-5" />
+                      </button>
                   </div>
-                  <div className="col-span-2">
-                     <button onClick={() => handleRemoveExpense(expense.id)} className="w-full flex justify-center items-center p-2 text-muted-foreground hover:text-red-600 dark:hover:text-red-500" aria-label={`Remove expense ${index + 1}`}>
-                       <TrashIcon className="w-5 h-5" />
-                     </button>
+                  <div className="col-span-2 flex justify-end">
+                    <button onClick={() => handleRemoveExpense(expense.id)} className="p-2 rounded-full text-muted-foreground hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-800/50 dark:hover:text-red-400" aria-label={`Remove expense ${index + 1}`}>
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-            <button onClick={handleAddExpense} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 border border-dashed border-border text-muted-foreground rounded-md hover:bg-muted/80 transition-colors">
-              <PlusIcon className="w-5 h-5" />
+            <button onClick={handleAddExpense} className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80">
+              <PlusIcon className="w-4 h-4" />
               Add Expense
             </button>
           </div>
-          
-          <div className="mt-6">
-            <label htmlFor="user-notes" className="block text-sm font-medium text-muted-foreground mb-1">Additional Notes for AI</label>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
-              Tell the AI your goals, concerns, or any specific things to consider (e.g., "I'm trying to save for a vacation").
-            </p>
-            <div className="relative">
-              <textarea
-                id="user-notes"
-                value={userNotes}
-                onChange={(e) => setUserNotes(e.target.value)}
-                placeholder="Type your thoughts here..."
-                rows={3}
-                className="w-full pl-3 pr-10 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary resize-none"
-              />
-              <button onClick={() => startListening({ type: 'notes' })} className={`absolute top-2 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'notes' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label="Use microphone for notes">
-                <MicIcon className="w-5 h-5" />
-              </button>
+           <div className="mt-6">
+                <label htmlFor="user-notes" className="block text-sm font-medium text-muted-foreground mb-1">Additional Notes</label>
+                <div className="relative">
+                    <textarea
+                        id="user-notes"
+                        value={userNotes}
+                        onChange={(e) => setUserNotes(e.target.value)}
+                        placeholder="e.g., I'm saving for a vacation, I want to reduce my dining out expenses."
+                        rows={3}
+                        className="w-full pl-3 pr-10 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                    <button onClick={() => startListening({ type: 'notes' })} className={`absolute top-2 right-0 px-3 flex items-center rounded-r-md ${isListening && activeInput?.type === 'notes' ? 'text-red-500 animate-pulse' : 'text-muted-foreground hover:text-primary'}`} aria-label="Use microphone for notes">
+                        <MicIcon className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
-          </div>
-
-          <button
-            onClick={handleGenerateBudget}
-            disabled={isLoading}
-            className="mt-6 w-full bg-primary text-primary-foreground font-bold py-3 px-4 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 flex items-center justify-center"
-          >
-            {isLoading && <LoadingIcon className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />}
-            {isLoading ? 'Generating...' : 'Generate Budget'}
-          </button>
         </div>
 
         <div className="bg-card p-6 rounded-2xl shadow-lg border flex flex-col">
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-              <h2 className="text-2xl font-bold text-card-foreground">Your AI Budget Plan</h2>
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="flex items-center gap-2">
-                    <label htmlFor="tts-provider" className="text-sm font-medium text-muted-foreground">Provider</label>
-                    <select
-                        id="tts-provider"
-                        value={ttsProvider}
-                        onChange={(e) => setTtsProvider(e.target.value as 'gemini' | 'elevenlabs')}
-                        disabled={!budgetPlan || isLoading || isSpeaking}
-                        className="bg-muted border border-border rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50"
-                    >
-                        <option value="gemini">Gemini</option>
-                        <option value="elevenlabs">ElevenLabs</option>
-                    </select>
-                </div>
-                <div>
-                  <label htmlFor="voice-select" className="sr-only">Select Voice</label>
-                  <select
-                    id="voice-select"
-                    value={ttsProvider === 'gemini' ? selectedGeminiVoice : selectedElevenLabsVoice}
-                    onChange={(e) => {
-                      if (ttsProvider === 'gemini') {
-                        setSelectedGeminiVoice(e.target.value);
-                      } else {
-                        setSelectedElevenLabsVoice(e.target.value);
-                      }
-                    }}
-                    disabled={!budgetPlan || isLoading || isSpeaking}
-                    className="bg-muted border border-border rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {(ttsProvider === 'gemini' ? geminiVoices : elevenLabsVoices).map(voice => (
-                      <option key={voice.id} value={voice.id}>{voice.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-          </div>
-          <div className='mb-6'>
-            <button onClick={togglePlayback} disabled={!budgetPlan || isLoading} className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                {isSpeaking ? <StopIcon className="w-5 h-5" /> : <SpeakerIcon className="w-5 h-5" />}
-                <span>{isSpeaking ? 'Stop Reading' : 'Read Aloud'}</span>
+          <h2 className="text-2xl font-bold mb-4 text-card-foreground">Generated Plan</h2>
+          
+          <div className="flex-grow mb-4">
+            <button
+                onClick={handleGenerateBudget}
+                disabled={isLoading}
+                className="w-full bg-primary text-primary-foreground font-bold py-3 px-4 rounded-md shadow hover:bg-primary/90 disabled:opacity-50 transition-all mb-4 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                    <>
+                        <LoadingIcon className="w-5 h-5 animate-spin" />
+                        Generating...
+                    </>
+                ) : 'Generate Budget Plan'}
             </button>
+            <div className="bg-muted p-4 rounded-lg min-h-[200px] text-muted-foreground whitespace-pre-wrap font-serif">
+              {budgetPlan || 'Your personalized budget plan will appear here.'}
+            </div>
           </div>
           
-          <div className="prose prose-slate dark:prose-invert max-w-none flex-grow overflow-y-auto p-1 rounded-md">
-            {isLoading && (
-              <div className="flex justify-center items-center h-full">
-                <LoadingIcon className="w-10 h-10 text-primary animate-spin" />
-              </div>
-            )}
-            {!isLoading && !budgetPlan && (
-              <div className="text-center text-muted-foreground h-full flex items-center justify-center">
-                <p>Your personalized budget plan will appear here once generated.</p>
-              </div>
-            )}
-            {budgetPlan && <div dangerouslySetInnerHTML={{ __html: budgetPlan.replace(/\n/g, '<br/>') }} />}
+          <div className="mt-auto">
+            <div className="flex items-center gap-4 mb-4">
+                <label htmlFor="voice-select" className="text-sm font-medium text-muted-foreground">Voice:</label>
+                <select 
+                    id="voice-select"
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                    disabled={isSpeaking}
+                    className="flex-grow bg-muted border border-border rounded-md py-1 px-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                    {elevenLabsVoices.map(voice => (
+                        <option key={voice.id} value={voice.id}>{voice.name}</option>
+                    ))}
+                </select>
+                <button
+                    onClick={togglePlayback}
+                    disabled={!budgetPlan || isLoading}
+                    className="p-3 rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50 transition-all"
+                    aria-label={isSpeaking ? "Stop reading plan" : "Read plan aloud"}
+                >
+                    {isSpeaking ? <StopIcon className="w-6 h-6" /> : <SpeakerIcon className="w-6 h-6" />}
+                </button>
+            </div>
+            <div>
+                 <input
+                    type="text"
+                    value={planName}
+                    onChange={(e) => setPlanName(e.target.value)}
+                    placeholder="Enter a name for this plan"
+                    className="w-full mb-2 pl-3 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
+                 />
+                 <button 
+                    onClick={handleSave}
+                    disabled={!budgetPlan || !planName}
+                    className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 px-4 rounded-md shadow hover:bg-green-700 disabled:opacity-50 transition-colors"
+                >
+                    <SaveIcon className="w-5 h-5" />
+                    {initialPlan ? 'Update Plan' : 'Save Plan'}
+                </button>
+            </div>
           </div>
-          {budgetPlan && !isLoading && (
-              <div className="mt-6 pt-6 border-t border-border">
-                <label htmlFor="planName" className="block text-sm font-medium text-muted-foreground mb-1">Plan Name</label>
-                  <div className="flex gap-4">
-                      <input
-                          type="text"
-                          id="planName"
-                          value={planName}
-                          onChange={(e) => setPlanName(e.target.value)}
-                          placeholder="e.g., Budget for August"
-                          className="w-full px-3 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
-                      />
-                      <button 
-                        onClick={handleSave}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-colors"
-                      >
-                          <SaveIcon className="w-5 h-5"/>
-                          <span>{initialPlan ? 'Update Plan' : 'Save Plan'}</span>
-                      </button>
-                  </div>
-              </div>
-          )}
         </div>
       </main>
       <style>{`
@@ -458,6 +495,13 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
         }
         .animate-fade-in {
             animation: fade-in 0.5s ease-out forwards;
+        }
+        .animate-pulse {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
       `}</style>
     </div>
