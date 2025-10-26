@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { generateBudget } from './services/geminiService';
 import { generateSpeechStream } from './services/elevenLabsService';
 import type { Expense, ActiveInput, SavedPlan } from './types';
-import { PlusIcon, TrashIcon, MicIcon, SpeakerIcon, LoadingIcon, StopIcon, ArrowLeftIcon, SaveIcon } from './components/Icons';
+import { PlusIcon, TrashIcon, MicIcon, SpeakerIcon, LoadingIcon, StopIcon, ArrowLeftIcon, SaveIcon, UserPlusIcon } from './components/Icons';
 
 // Minimal type definitions for Web Speech API
 interface SpeechRecognitionEvent extends Event {
@@ -62,6 +62,8 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
   const [activeInput, setActiveInput] = useState<ActiveInput>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -367,6 +369,37 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
     }
   }, [handleRecognitionResult]);
   
+  const handleSendInvite = async () => {
+    if (!inviteEmail) {
+      setError("Please enter an email to invite.");
+      return;
+    }
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: inviteEmail,
+          from: 'onboarding@resend.dev',
+          subject: `You've been invited to collaborate on a budget plan!`,
+          html: `<p>You have been invited to collaborate on the budget plan: <strong>${initialPlan?.name}</strong>. Click the link to join: <a href="${window.location.href}">Join Now</a></p>`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send email');
+      }
+
+      setShowInviteModal(false);
+      setInviteEmail('');
+    } catch (error) {
+      console.error(error);
+      setError("Failed to send invitation. Please try again later.");
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
         <div className="mb-6">
@@ -521,18 +554,61 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ initialPlan, onNavigateTo
                     placeholder="Enter a name for this plan"
                     className="w-full mb-2 pl-3 py-2 bg-muted border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                  />
-                 <button 
-                    onClick={handleSave}
-                    disabled={!budgetPlan || !planName}
-                    className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 px-4 rounded-md shadow hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                    <SaveIcon className="w-5 h-5" />
-                    {initialPlan ? 'Update Plan' : 'Save Plan'}
-                </button>
+                 <div className="flex gap-2">
+                    <button 
+                        onClick={handleSave}
+                        disabled={!budgetPlan || !planName}
+                        className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 px-4 rounded-md shadow hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                        <SaveIcon className="w-5 h-5" />
+                        {initialPlan ? 'Update Plan' : 'Save Plan'}
+                    </button>
+                    {initialPlan && (
+                        <button 
+                            onClick={() => setShowInviteModal(true)}
+                            className="flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-md shadow hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        >
+                            <UserPlusIcon className="w-5 h-5" />
+                            Invite
+                        </button>
+                    )}
+                </div>
             </div>
           </div>
         </div>
       </main>
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/50">
+          <div className="bg-card p-8 rounded-2xl shadow-2xl max-w-md w-full border border-border">
+            <h2 className="text-2xl font-bold text-card-foreground mb-4">Invite Collaborator</h2>
+            <p className="text-muted-foreground mb-6">Enter the email of the person you want to invite to this budget plan.</p>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendInvite()}
+              placeholder="Enter collaborator's email"
+              className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+                <button
+                onClick={() => setShowInviteModal(false)}
+                className="bg-muted text-muted-foreground font-bold py-2 px-4 rounded-lg hover:bg-muted/80 transition-all"
+                >
+                Cancel
+                </button>
+                <button
+                onClick={handleSendInvite}
+                disabled={!inviteEmail.trim()}
+                className="bg-primary text-primary-foreground font-bold py-2 px-4 rounded-lg shadow hover:bg-primary/90 transition-all disabled:opacity-50"
+                >
+                Send Invite
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes fade-in {
             from { opacity: 0; transform: translateY(10px); }

@@ -13,9 +13,11 @@
     "@google/genai": "^1.27.0",
     "@react-oauth/google": "^0.12.2",
     "@types/react-router-dom": "^5.3.3",
+    "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.4"
+    "react-router-dom": "^7.9.4",
+    "resend": "^6.2.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
